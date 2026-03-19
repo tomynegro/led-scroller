@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>LED Scroller</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=VT323&family=Press+Start+2P&family=Bebas+Neue&family=Permanent+Marker&family=Pacifico&family=Rajdhani:wght@700&family=Anton&family=Bungee&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0a0a0f;
+  --panel: #111118;
+  --border: #2a2a3a;
+  --accent: #00ff88;
+  --accent2: #ff3366;
+  --text: #e0e0f0;
+  --muted: #555570;
+  --glow: 0 0 12px rgba(0,255,136,0.5);
+}
+
+html, body { height: 100%; overflow-x: hidden; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  min-height: 100vh;
+  padding: 14px;
+  overflow-y: auto;
+}
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,255,136,0.012) 2px, rgba(0,255,136,0.012) 4px);
+  pointer-events: none; z-index: 0;
+}
+
+.app {
+  position: relative; z-index: 1;
+  width: 100%; max-width: 860px;
+  margin: 0 auto;
+  display: flex; flex-direction: column; gap: 12px;
+  padding-bottom: 20px;
+}
+
+.header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+
+.logo {
+  font-family: 'Orbitron', monospace; font-weight: 900;
+  font-size: clamp(15px, 5vw, 21px);
+  color: var(--accent); text-shadow: var(--glow); letter-spacing: 4px;
+}
+.logo span { color: var(--accent2); text-shadow: 0 0 12px rgba(255,51,102,0.6); }
+.tagline { font-size: 10px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
+
+/* PREVIEW */
+.preview-wrap {
+  border: 1px solid var(--border); border-radius: 6px;
+  background: #000; overflow: hidden; position: relative;
+}
+.preview-label {
+  position: absolute; top: 6px; left: 10px;
+  font-size: 9px; color: var(--muted); letter-spacing: 2px; z-index: 2;
+}
+.preview-screen {
+  height: clamp(55px, 14vw, 88px);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden; position: relative;
+}
+.preview-screen::before, .preview-screen::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 40px; z-index: 3; pointer-events: none;
+}
+.preview-screen::before { left: 0; background: linear-gradient(to right, var(--preview-bg,#000), transparent); }
+.preview-screen::after  { right: 0; background: linear-gradient(to left, var(--preview-bg,#000), transparent); }
+.scroller-track { white-space: nowrap; will-change: transform; padding: 0 14px; display: inline-block; }
+
+/* CONTROLS GRID */
+.controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+@media (max-width: 480px) { .controls { grid-template-columns: 1fr; } }
+
+.card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 12px;
+}
+.card-title {
+  font-size: 9px; letter-spacing: 3px; color: var(--accent);
+  text-transform: uppercase; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 7px;
+}
+.card-title::before {
+  content: ''; display: block; width: 3px; height: 10px;
+  background: var(--accent); box-shadow: var(--glow); flex-shrink: 0;
+}
+.full-card { grid-column: 1 / -1; }
+
+/* TEXT INPUT */
+.text-input-wrap { display: flex; gap: 7px; align-items: stretch; }
+.text-input {
+  flex: 1; min-width: 0;
+  background: #000; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--accent); font-family: 'Share Tech Mono', monospace;
+  font-size: 15px; padding: 9px 12px; outline: none; caret-color: var(--accent);
+  transition: border-color 0.2s;
+}
+.text-input:focus { border-color: var(--accent); box-shadow: var(--glow); }
+
+.icon-btn {
+  background: #000; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text); font-size: 16px; padding: 0 10px;
+  cursor: pointer; transition: border-color 0.2s; flex-shrink: 0;
+}
+.icon-btn:hover { border-color: var(--accent); }
+.icon-btn.active { border-color: var(--accent); color: var(--accent); }
+
+.emoji-picker {
+  display: none; flex-wrap: wrap; gap: 5px;
+  margin-top: 9px; background: #000; border: 1px solid var(--border);
+  border-radius: 4px; padding: 9px; max-height: 115px; overflow-y: auto;
+}
+.emoji-picker.open { display: flex; }
+.emoji-item { font-size: 20px; cursor: pointer; padding: 3px; border-radius: 3px; line-height: 1; transition: background 0.15s; }
+.emoji-item:hover { background: rgba(0,255,136,0.12); }
+
+/* FONT GRID */
+.font-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 6px; }
+.font-btn {
+  background: #000; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--text); font-size: 13px; padding: 7px 5px;
+  cursor: pointer; text-align: center; transition: all 0.2s;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.font-btn:hover { border-color: var(--muted); }
+.font-btn.active { border-color: var(--accent); color: var(--accent); box-shadow: var(--glow); background: rgba(0,255,136,0.05); }
+
+/* ROWS */
+.row { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.row:last-child { margin-bottom: 0; }
+label { font-size: 10px; color: var(--muted); min-width: 60px; letter-spacing: 1px; flex-shrink: 0; }
+input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); cursor: pointer; }
+.val { font-size: 12px; color: var(--accent); min-width: 34px; text-align: right; flex-shrink: 0; }
+input[type=color] { width: 32px; height: 26px; border: 1px solid var(--border); background: none; cursor: pointer; border-radius: 3px; padding: 2px; flex-shrink: 0; }
+
+.color-presets { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 4px; }
+.preset-dot { width: 19px; height: 19px; border-radius: 50%; cursor: pointer; border: 2px solid transparent; transition: border-color 0.15s, transform 0.15s; flex-shrink: 0; }
+.preset-dot:hover, .preset-dot.active { border-color: #fff; transform: scale(1.2); }
+
+/* DIRECTION */
+.direction-btns { display: flex; gap: 7px; width: 100%; }
+.dir-btn {
+  flex: 1; background: #000; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); font-family: 'Share Tech Mono', monospace; font-size: 14px;
+  padding: 7px 4px; cursor: pointer; text-align: center; transition: all 0.2s;
+}
+.dir-btn.active { border-color: var(--accent); color: var(--accent); box-shadow: var(--glow); background: rgba(0,255,136,0.05); }
+
+/* EFFECTS GRID */
+.effects-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 6px;
+}
+.fx-btn {
+  background: #000; border: 1px solid var(--border); border-radius: 4px;
+  color: var(--muted); font-family: 'Share Tech Mono', monospace;
+  font-size: 11px; padding: 8px 5px;
+  cursor: pointer; text-align: center; transition: all 0.2s;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  line-height: 1.2;
+}
+.fx-btn .fx-icon { font-size: 16px; }
+.fx-btn:hover { border-color: var(--muted); color: var(--text); }
+.fx-btn.active {
+  border-color: var(--accent2);
+  color: var(--accent2);
+  background: rgba(255,51,102,0.07);
+  box-shadow: 0 0 10px rgba(255,51,102,0.3);
+}
+
+/* SAVED */
+.saved-list { display: flex; flex-direction: column; gap: 5px; max-height: 160px; overflow-y: auto; }
+.saved-list:empty::after { content: 'Ningún mensaje guardado aún'; font-size: 11px; color: var(--muted); padding: 4px 0; display: block; }
+.saved-item {
+  display: flex; align-items: center; gap: 7px;
+  background: #000; border: 1px solid var(--border); border-radius: 4px;
+  padding: 8px 10px; cursor: pointer; transition: border-color 0.2s;
+}
+.saved-item:hover { border-color: var(--muted); }
+.saved-item-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+.saved-item-text { flex: 1; min-width: 0; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-item-meta { font-size: 10px; color: var(--muted); flex-shrink: 0; }
+.saved-item-del { background: none; border: none; color: var(--muted); font-size: 14px; cursor: pointer; padding: 0 2px; line-height: 1; transition: color 0.2s; flex-shrink: 0; }
+.saved-item-del:hover { color: var(--accent2); }
+
+.save-btn-row { display: flex; gap: 7px; margin-top: 9px; }
+.save-inp {
+  flex: 1; min-width: 0; background: #000; border: 1px solid var(--border);
+  border-radius: 4px; color: var(--text); font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; padding: 7px 10px; outline: none; transition: border-color 0.2s;
+}
+.save-inp:focus { border-color: var(--accent); }
+.save-inp::placeholder { color: var(--muted); }
+.save-btn {
+  background: rgba(0,255,136,0.1); border: 1px solid var(--accent);
+  border-radius: 4px; color: var(--accent); font-family: 'Share Tech Mono', monospace;
+  font-size: 12px; padding: 7px 12px; cursor: pointer; white-space: nowrap; transition: all 0.2s;
+}
+.save-btn:hover { background: rgba(0,255,136,0.2); }
+
+/* PLAY */
+.play-btn {
+  width: 100%; padding: 14px;
+  background: var(--accent); color: #000; border: none; border-radius: 6px;
+  font-family: 'Orbitron', monospace; font-weight: 900;
+  font-size: clamp(11px, 3.5vw, 14px); letter-spacing: 3px;
+  cursor: pointer; text-transform: uppercase; transition: all 0.2s;
+  box-shadow: 0 0 20px rgba(0,255,136,0.3);
+}
+.play-btn:hover, .play-btn:active { background: #00ffaa; box-shadow: 0 0 30px rgba(0,255,136,0.6); }
+
+/* FULLSCREEN */
+#fullscreen-overlay {
+  display: none; position: fixed; inset: 0; z-index: 9999;
+  align-items: center; justify-content: center;
+  overflow: hidden; cursor: none;
+}
+#fullscreen-overlay.active { display: flex; }
+
+/* Fullscreen canvas for gradient/flash bg effects */
+#fx-canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  pointer-events: none; z-index: 0;
+}
+
+#fs-track {
+  white-space: nowrap; will-change: transform;
+  display: inline-block; position: relative; z-index: 1;
+}
+
+/* Scanlines overlay */
+#scanlines {
+  display: none;
+  position: absolute; inset: 0; z-index: 2; pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.35) 3px, rgba(0,0,0,0.35) 4px);
+}
+
+.exit-hint {
+  position: fixed; bottom: 14px; right: 18px;
+  font-family: 'Share Tech Mono', monospace; font-size: 11px;
+  color: rgba(255,255,255,0.25); letter-spacing: 2px;
+  z-index: 10000; pointer-events: none;
+  animation: fadeHint 5s ease forwards;
+}
+@keyframes fadeHint { 0%,50%{opacity:1} 100%{opacity:0} }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: #000; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="header">
+    <div>
+      <div class="logo">LED<span>·</span>SCROLL</div>
+      <div class="tagline">Configurador de marquesina</div>
+    </div>
+  </div>
+
+  <div class="preview-wrap">
+    <div class="preview-label">PREVIEW ▸</div>
+    <div class="preview-screen" id="previewScreen">
+      <div class="scroller-track" id="previewTrack">¡Escribe tu mensaje! 🚀</div>
+    </div>
+  </div>
+
+  <div class="controls">
+
+    <!-- MENSAJE -->
+    <div class="card full-card">
+      <div class="card-title">Mensaje</div>
+      <div class="text-input-wrap">
+        <input class="text-input" id="msgInput" type="text" value="¡Escribe tu mensaje! 🚀" placeholder="Escribe tu texto...">
+        <button class="icon-btn" id="emojiToggle" title="Emojis">☺</button>
+      </div>
+      <div class="emoji-picker" id="emojiPicker"></div>
+    </div>
+
+    <!-- TIPOGRAFÍA -->
+    <div class="card full-card">
+      <div class="card-title">Tipografía</div>
+      <div class="font-grid" id="fontGrid"></div>
+      <div style="height:10px"></div>
+      <div class="row">
+        <label>Tamaño</label>
+        <input type="range" id="fontSize" min="16" max="80" value="36">
+        <span class="val" id="fontSizeVal">36px</span>
+      </div>
+      <div class="row">
+        <label>Grosor</label>
+        <input type="range" id="fontWeight" min="1" max="3" value="2" step="1">
+        <span class="val" id="fontWeightVal">Bold</span>
+      </div>
+    </div>
+
+    <!-- MOVIMIENTO -->
+    <div class="card">
+      <div class="card-title">Movimiento</div>
+      <div class="row">
+        <label>Velocidad</label>
+        <input type="range" id="speed" min="1" max="10" value="4">
+        <span class="val" id="speedVal">4</span>
+      </div>
+      <div class="row" style="flex-direction:column; align-items:flex-start; gap:7px;">
+        <label>Dirección</label>
+        <div class="direction-btns">
+          <button class="dir-btn active" data-dir="-1">◀◀</button>
+          <button class="dir-btn" data-dir="1">▶▶</button>
+          <button class="dir-btn" data-dir="bounce">◀▶</button>
+          <button class="dir-btn" data-dir="static" title="Texto fijo">⏸ Fijo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- COLORES -->
+    <div class="card">
+      <div class="card-title">Colores</div>
+      <div class="row">
+        <label>Texto</label>
+        <input type="color" id="textColor" value="#00ff88">
+        <div class="color-presets" id="textPresets">
+          <div class="preset-dot active" data-color="#00ff88" style="background:#00ff88"></div>
+          <div class="preset-dot" data-color="#ffffff" style="background:#ffffff"></div>
+          <div class="preset-dot" data-color="#ff3366" style="background:#ff3366"></div>
+          <div class="preset-dot" data-color="#ffcc00" style="background:#ffcc00"></div>
+          <div class="preset-dot" data-color="#00ccff" style="background:#00ccff"></div>
+          <div class="preset-dot" data-color="#ff6600" style="background:#ff6600"></div>
+          <div class="preset-dot" data-color="#ff00ff" style="background:#ff00ff"></div>
+        </div>
+      </div>
+      <div class="row">
+        <label>Fondo</label>
+        <input type="color" id="bgColor" value="#000000">
+        <div class="color-presets" id="bgPresets">
+          <div class="preset-dot active" data-color="#000000" style="background:#000000;border-color:#444;"></div>
+          <div class="preset-dot" data-color="#0a0a3a" style="background:#0a0a3a"></div>
+          <div class="preset-dot" data-color="#1a0000" style="background:#1a0000"></div>
+          <div class="preset-dot" data-color="#001a00" style="background:#001a00"></div>
+          <div class="preset-dot" data-color="#ffffff" style="background:#ffffff"></div>
+          <div class="preset-dot" data-color="#1a1a00" style="background:#1a1a00"></div>
+          <div class="preset-dot" data-color="#ff0000" style="background:#ff0000"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EFECTOS -->
+    <div class="card full-card">
+      <div class="card-title">Efectos visuales</div>
+      <div class="effects-grid" id="effectsGrid"></div>
+    </div>
+
+    <!-- GUARDADOS -->
+    <div class="card full-card">
+      <div class="card-title">Mensajes guardados</div>
+      <div class="saved-list" id="savedList"></div>
+      <div class="save-btn-row">
+        <input class="save-inp" id="saveNameInp" type="text" placeholder="Nombre del mensaje...">
+        <button class="save-btn" id="saveBtn">💾 Guardar</button>
+      </div>
+    </div>
+
+    <!-- PLAY -->
+    <div class="card full-card" style="padding:0;border:none;background:none;">
+      <button class="play-btn" id="playBtn">▶ &nbsp; PANTALLA COMPLETA</button>
+    </div>
+
+  </div>
+</div>
+
+<!-- FULLSCREEN -->
+<div id="fullscreen-overlay">
+  <canvas id="fx-canvas"></canvas>
+  <div id="scanlines"></div>
+  <div id="fs-track"></div>
+</div>
+
+<script>
+// ── FONTS ──────────────────────────────────────────────────────────────────────
+const FONTS = [
+  { family: "'Share Tech Mono', monospace", label: 'Mono' },
+  { family: "'Orbitron', monospace",        label: 'Orbitron' },
+  { family: "'VT323', monospace",           label: 'VT323' },
+  { family: "'Press Start 2P', monospace",  label: '8-bit' },
+  { family: "'Bebas Neue', sans-serif",     label: 'Bebas' },
+  { family: "'Anton', sans-serif",          label: 'Anton' },
+  { family: "'Bungee', sans-serif",         label: 'Bungee' },
+  { family: "'Rajdhani', sans-serif",       label: 'Rajdhani' },
+  { family: "'Pacifico', cursive",          label: 'Pacifico' },
+  { family: "'Permanent Marker', cursive",  label: 'Marker' },
+];
+
+const fontGrid = document.getElementById('fontGrid');
+FONTS.forEach((f, i) => {
+  const btn = document.createElement('button');
+  btn.className = 'font-btn' + (i === 0 ? ' active' : '');
+  btn.textContent = f.label;
+  btn.style.fontFamily = f.family;
+  btn.dataset.idx = i;
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.font-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.fontFamily = f.family;
+    updatePreview();
+  });
+  fontGrid.appendChild(btn);
+});
+
+// ── EFFECTS DEFINITIONS ────────────────────────────────────────────────────────
+const EFFECTS = [
+  { id: 'none',       icon: '○',  label: 'Sin efecto' },
+  { id: 'gradient',   icon: '🌅', label: 'Gradiente' },
+  { id: 'flash',      icon: '⚡', label: 'Flash fondo' },
+  { id: 'blink',      icon: '💡', label: 'Intermitente' },
+  { id: 'rainbow',    icon: '🌈', label: 'Arcoiris' },
+  { id: 'wave',       icon: '🌊', label: 'Onda' },
+  { id: 'glitch',     icon: '📡', label: 'Glitch' },
+  { id: 'scanlines',  icon: '📺', label: 'Scanlines' },
+  { id: 'pulse',      icon: '💓', label: 'Pulso glow' },
+  { id: 'matrix',     icon: '🔢', label: 'Matrix bg' },
+];
+
+const effectsGrid = document.getElementById('effectsGrid');
+EFFECTS.forEach(ef => {
+  const btn = document.createElement('button');
+  btn.className = 'fx-btn' + (ef.id === 'none' ? ' active' : '');
+  btn.dataset.fx = ef.id;
+  btn.innerHTML = `<span class="fx-icon">${ef.icon}</span><span>${ef.label}</span>`;
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.fx-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    state.effect = ef.id;
+    updatePreview();
+  });
+  effectsGrid.appendChild(btn);
+});
+
+// ── EMOJIS ─────────────────────────────────────────────────────────────────────
+const EMOJIS = [
+  '🚀','⭐','🔥','💥','🎉','🎊','🎵','🎶','❤️','💛','💚','💙','💜','🖤','🤍',
+  '✅','❌','⚡','🌟','💫','🌈','🏆','🥇','🎯','🎮','👍','👏','🙌','💪','😀',
+  '😎','🤩','🥳','😍','🤔','😂','🤣','🥰','😊','🌙','☀️','🌊','🍕','🍺','☕',
+  '🐉','🦁','🐺','🦊','🐧','🐳','🐝','🦋','🌸','🌺','🍀','🌴','🌵','❄️','🔔',
+  '📢','📣','⚠️','💡','🔑','🔒','💎','👑','🎪','🎠','🛸','🌍','🚗','✈️','⚓',
+  '🎸','🎹','🎺','🥁','📱','💻','🖥️','📡','🔭','⚗️','🧬','🔬','🎲','♠️','♥️'
+];
+const picker = document.getElementById('emojiPicker');
+EMOJIS.forEach(e => {
+  const el = document.createElement('div');
+  el.className = 'emoji-item';
+  el.textContent = e;
+  el.addEventListener('click', () => insertAtCursor(e));
+  picker.appendChild(el);
+});
+document.getElementById('emojiToggle').addEventListener('click', () => {
+  picker.classList.toggle('open');
+  document.getElementById('emojiToggle').classList.toggle('active', picker.classList.contains('open'));
+});
+function insertAtCursor(ch) {
+  const inp = document.getElementById('msgInput');
+  const s = inp.selectionStart, e2 = inp.selectionEnd;
+  inp.value = inp.value.slice(0, s) + ch + inp.value.slice(e2);
+  inp.selectionStart = inp.selectionEnd = s + ch.length;
+  inp.focus();
+  state.text = inp.value;
+  updatePreview();
+}
+
+// ── STATE ──────────────────────────────────────────────────────────────────────
+const state = {
+  text:       '¡Escribe tu mensaje! 🚀',
+  fontSize:   36,
+  fontWeight: 700,
+  fontFamily: FONTS[0].family,
+  speed:      4,
+  direction:  -1,   // -1, 1, 'bounce', 'static'
+  textColor:  '#00ff88',
+  bgColor:    '#000000',
+  effect:     'none',
+};
+
+// ── SAVED MESSAGES ─────────────────────────────────────────────────────────────
+let savedMessages = [];
+try { savedMessages = JSON.parse(localStorage.getItem('ledscroller_v2') || '[]'); } catch(e) {}
+function saveToDB() { try { localStorage.setItem('ledscroller_v2', JSON.stringify(savedMessages)); } catch(e) {} }
+
+function renderSaved() {
+  const list = document.getElementById('savedList');
+  list.innerHTML = '';
+  savedMessages.forEach((msg, i) => {
+    const item = document.createElement('div');
+    item.className = 'saved-item';
+    const dot  = document.createElement('div');
+    dot.className = 'saved-item-dot';
+    dot.style.background = msg.textColor;
+    const txt  = document.createElement('div');
+    txt.className = 'saved-item-text';
+    txt.textContent = (msg.name ? msg.name + ': ' : '') + msg.text;
+    const meta = document.createElement('div');
+    meta.className = 'saved-item-meta';
+    const dirLabel = msg.direction === 'bounce' ? '↔' : msg.direction === -1 ? '←' : msg.direction === 1 ? '→' : '⏸';
+    const fxLabel = msg.effect && msg.effect !== 'none' ? ' · ' + msg.effect : '';
+    meta.textContent = `v${msg.speed} ${dirLabel}${fxLabel}`;
+    const del = document.createElement('button');
+    del.className = 'saved-item-del';
+    del.textContent = '✕';
+    del.addEventListener('click', ev => { ev.stopPropagation(); savedMessages.splice(i, 1); saveToDB(); renderSaved(); });
+    item.append(dot, txt, meta, del);
+    item.addEventListener('click', () => loadSaved(msg));
+    list.appendChild(item);
+  });
+}
+
+function loadSaved(msg) {
+  Object.assign(state, {
+    text: msg.text, fontSize: msg.fontSize, fontWeight: msg.fontWeight,
+    fontFamily: msg.fontFamily || FONTS[0].family,
+    speed: msg.speed, direction: msg.direction,
+    textColor: msg.textColor, bgColor: msg.bgColor,
+    effect: msg.effect || 'none',
+  });
+  document.getElementById('msgInput').value = msg.text;
+  document.getElementById('fontSize').value  = msg.fontSize;
+  document.getElementById('fontSizeVal').textContent = msg.fontSize + 'px';
+  const wIdx = [400,700,900].indexOf(msg.fontWeight);
+  document.getElementById('fontWeight').value = wIdx + 1;
+  document.getElementById('fontWeightVal').textContent = ['Normal','Bold','Black'][wIdx];
+  document.getElementById('speed').value  = msg.speed;
+  document.getElementById('speedVal').textContent = msg.speed;
+  document.getElementById('textColor').value = msg.textColor;
+  document.getElementById('bgColor').value   = msg.bgColor;
+  document.querySelectorAll('.font-btn').forEach((b,i) => b.classList.toggle('active', FONTS[i].family === state.fontFamily));
+  document.querySelectorAll('.dir-btn').forEach(b => {
+    const d = b.dataset.dir === 'bounce' ? 'bounce' : b.dataset.dir === 'static' ? 'static' : +b.dataset.dir;
+    b.classList.toggle('active', d === state.direction);
+  });
+  ['textPresets','bgPresets'].forEach((id, ci) => {
+    const key = ci === 0 ? 'textColor' : 'bgColor';
+    document.querySelectorAll(`#${id} .preset-dot`).forEach(d => d.classList.toggle('active', d.dataset.color === msg[key]));
+  });
+  document.querySelectorAll('.fx-btn').forEach(b => b.classList.toggle('active', b.dataset.fx === state.effect));
+  updatePreview(); runPreview();
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const name = document.getElementById('saveNameInp').value.trim();
+  savedMessages.push({ name, ...JSON.parse(JSON.stringify(state)) });
+  saveToDB(); renderSaved();
+  document.getElementById('saveNameInp').value = '';
+});
+renderSaved();
+
+// ── PREVIEW ────────────────────────────────────────────────────────────────────
+let previewAnim = null, previewPos = 0, bounceDir = -1;
+
+function applyTextStyles(el, overrideSize) {
+  el.style.fontFamily    = state.fontFamily;
+  el.style.fontSize      = (overrideSize || state.fontSize) + 'px';
+  el.style.fontWeight    = state.fontWeight;
+  el.style.color         = state.textColor;
+  el.style.letterSpacing = '2px';
+  el.style.lineHeight    = '1';
+  const gs = Math.round((overrideSize || state.fontSize) * 0.4);
+  el.style.textShadow    = `0 0 ${gs}px ${state.textColor}99, 0 0 ${gs*2}px ${state.textColor}44`;
+  el.style.webkitTextFillColor = '';
+  el.style.backgroundClip = '';
+  el.style.webkitBackgroundClip = '';
+  el.style.backgroundImage = '';
+}
+
+function updatePreview() {
+  const track  = document.getElementById('previewTrack');
+  const screen = document.getElementById('previewScreen');
+  track.textContent = state.text || ' ';
+  applyTextStyles(track);
+  screen.style.background = state.bgColor;
+  screen.style.setProperty('--preview-bg', state.bgColor);
+  // Static centering
+  if (state.direction === 'static') {
+    track.style.transform = 'translateX(0)';
+  }
+}
+
+function runPreview() {
+  cancelAnimationFrame(previewAnim);
+  const track  = document.getElementById('previewTrack');
+  const screen = document.getElementById('previewScreen');
+
+  if (state.direction === 'static') {
+    track.style.transform = 'translateX(0)';
+    return;
+  }
+
+  previewPos = state.direction === 1 ? -track.scrollWidth : screen.clientWidth;
+  if (state.direction === 'bounce') { previewPos = 0; bounceDir = -1; }
+
+  function step() {
+    const spd = state.speed * 0.6;
+    const tW  = track.scrollWidth;
+    const sW  = screen.clientWidth;
+    if (state.direction === -1) {
+      previewPos -= spd;
+      if (previewPos < -tW) previewPos = sW;
+    } else if (state.direction === 1) {
+      previewPos += spd;
+      if (previewPos > sW) previewPos = -tW;
+    } else {
+      previewPos += spd * bounceDir;
+      if (previewPos <= -(tW - sW)) bounceDir = 1;
+      if (previewPos >= 0) bounceDir = -1;
+    }
+    track.style.transform = `translateX(${previewPos}px)`;
+    previewAnim = requestAnimationFrame(step);
+  }
+  step();
+}
+
+// ── FULLSCREEN EFFECTS ENGINE ──────────────────────────────────────────────────
+let fsAnim = null, fsPos = 0, fsBounceDir = -1;
+let fxAnim = null;
+let fxTime = 0;
+// Matrix rain state
+let matrixCols = [], matrixCanvas = null, matrixCtx = null;
+
+function hexToRgb(hex) {
+  const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16);
+  return [r, g, b];
+}
+
+function lerpColor(a, b, t) {
+  return [
+    Math.round(a[0] + (b[0]-a[0])*t),
+    Math.round(a[1] + (b[1]-a[1])*t),
+    Math.round(a[2] + (b[2]-a[2])*t),
+  ];
+}
+
+function rgbStr(c) { return `rgb(${c[0]},${c[1]},${c[2]})`; }
+
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h/30) % 12;
+  const a = s * Math.min(l, 1-l);
+  const f = n => l - a * Math.max(-1, Math.min(k(n)-3, Math.min(9-k(n), 1)));
+  const toHex = x => Math.round(255*x).toString(16).padStart(2,'0');
+  return '#' + toHex(f(0)) + toHex(f(8)) + toHex(f(4));
+}
+
+function stopFxAnim() {
+  cancelAnimationFrame(fxAnim);
+  fxAnim = null;
+  const canvas = document.getElementById('fx-canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  document.getElementById('scanlines').style.display = 'none';
+}
+
+function startEffect(overlay, fsTrack, effectiveW, effectiveH) {
+  const canvas = document.getElementById('fx-canvas');
+  canvas.width  = effectiveW;
+  canvas.height = effectiveH;
+  const ctx = canvas.getContext('2d');
+  const bgRgb = hexToRgb(state.bgColor);
+
+  stopFxAnim();
+  fxTime = 0;
+
+  const fx = state.effect;
+
+  if (fx === 'none') {
+    overlay.style.background = state.bgColor;
+    return;
+  }
+  if (fx === 'scanlines') {
+    overlay.style.background = state.bgColor;
+    document.getElementById('scanlines').style.display = 'block';
+    return;
+  }
+
+  // For effects that animate the background
+  overlay.style.background = 'transparent';
+
+  if (fx === 'gradient') {
+    // Slow horizontal gradient sweep using two complementary colors
+    const col2Hex = hslToHex((parseInt(state.bgColor.slice(1),16) % 360 + 150) % 360, 80, 20);
+    const col2 = hexToRgb(col2Hex);
+    function draw() {
+      fxTime += 0.004;
+      const angle = fxTime % (Math.PI * 2);
+      const grd = ctx.createLinearGradient(
+        effectiveW/2 + Math.cos(angle)*effectiveW*0.6,
+        effectiveH/2 + Math.sin(angle)*effectiveH*0.6,
+        effectiveW/2 - Math.cos(angle)*effectiveW*0.6,
+        effectiveH/2 - Math.sin(angle)*effectiveH*0.6
+      );
+      grd.addColorStop(0, rgbStr(bgRgb));
+      grd.addColorStop(0.5, rgbStr(col2));
+      grd.addColorStop(1, rgbStr(bgRgb));
+      ctx.fillStyle = grd;
+      ctx.fillRect(0,0,effectiveW,effectiveH);
+      fxAnim = requestAnimationFrame(draw);
+    }
+    draw();
+    return;
+  }
+
+  if (fx === 'flash') {
+    // Background flashes through vivid random colors
+    const flashColors = ['#ff0000','#ff6600','#ffff00','#00ff00','#00ffff','#0066ff','#ff00ff','#ffffff'];
+    let ci = 0, t = 0;
+    function draw() {
+      fxTime++;
+      t++;
+      const flashRate = Math.max(4, 20 - state.speed);
+      if (t >= flashRate) { t = 0; ci = (ci + 1) % flashColors.length; }
+      ctx.fillStyle = flashColors[ci];
+      ctx.fillRect(0,0,effectiveW,effectiveH);
+      fxAnim = requestAnimationFrame(draw);
+    }
+    draw();
+    return;
+  }
+
+  if (fx === 'blink') {
+    // Text and background alternate visibility
+    let blinkOn = true, t = 0;
+    function draw() {
+      t++;
+      const blinkRate = Math.max(6, 22 - state.speed * 2);
+      if (t >= blinkRate) { t = 0; blinkOn = !blinkOn; }
+      ctx.fillStyle = state.bgColor;
+      ctx.fillRect(0,0,effectiveW,effectiveH);
+      fsTrack.style.opacity = blinkOn ? '1' : '0';
+      fxAnim = requestAnimationFrame(draw);
+    }
+    draw();
+    return;
+  }
+
+  if (fx === 'rainbow') {
+    // Text color cycles through rainbow hues
+    let hue = 0;
+    function draw() {
+      hue = (hue + 1.5) % 360;
+      ctx.fillStyle = state.bgColor;
+      ctx.fillRect(0,0,effectiveW,effectiveH);
+      const col = hslToHex(hue, 100, 60);
+      const gs = Math.round(parseInt(fsTrack.style.fontSize)*0.4);
+      fsTrack.style.color = col;
+      fsTrack.style.textShadow = `0 0 ${gs}px ${col}cc, 0 0 ${gs*2}px ${col}66`;
+      fxAnim = requestAnimationFrame(draw);
+    }
+    draw();
+    return;
+  }
+
+  if (fx === 'wave') {
+    // Background color oscillates between bg and a brighter version
+    function draw() {
+      fxTime += 0.03;
+      const t2 = (Math.sin(fxTime) + 1) / 2;
+      const bright = lerpColor(bgRgb, [
+        Math.min(255, bgRgb[0] + 80),
+        Math.min(255, bgRgb[1] + 80),
+        Math.min(255, bgRgb[2] + 80),
+      ], t2);
+      ctx.fillStyle = rgbStr(bright);
+      ctx.fillRect(0,0,effectiveW,effectiveH);
+      fxAnim = requestAnimationFrame(draw);
+    }
+    draw();
+    return;
+  }
+
+  if (fx === 'pulse') {
+    // Glow around text pulses in size/intensity
+    const baseSize = parseFloat(fsTrack.style.fontSize);
+    const gs = Math.round(baseSize * 0.4);
+    function draw() {
+      fxTime += 0.06;
+      const t2 = (Math.sin(fxTime) + 1) / 2;
+      ctx.fillStyle = state.bgColor;
+      ctx.fillRect(0,0,effectiveW,effectiveH);
+      const glow1 = Math.round(gs + t2 * gs * 3);
+      const glow2 = Math.round(glow1 * 2);
+      const alpha1 = Math.round(100 + t2 * 155).toString(16).padStart(2,'0');
+      const alpha2 = Math.round(40 + t2 * 80).toString(16).padStart(2,'0');
+      fsTrack.style.textShadow = `0 0 ${glow1}px ${state.textColor}${alpha1}, 0 0 ${glow2}px ${state.textColor}${alpha2}`;
+      fxAnim = requestAnimationFrame(draw);
+    }
+    draw();
+    return;
+  }
+
+  if (fx === 'glitch') {
+    // Chromatic aberration + random jitter slices
+    const baseSize = parseFloat(fsTrack.style.fontSize);
+    let glitchTimer = 0;
+    let isGlitching = false;
+    let glitchDuration = 0;
+
+    function draw() {
+      glitchTimer++;
+      ctx.fillStyle = state.bgColor;
+      ctx.fillRect(0,0,effectiveW,effectiveH);
+
+      // Random trigger
+      if (!isGlitching && Math.random() < 0.015) {
+        isGlitching = true;
+        glitchDuration = Math.floor(Math.random() * 12) + 4;
+      }
+      if (isGlitching) {
+        glitchDuration--;
+        if (glitchDuration <= 0) isGlitching = false;
+
+        // Draw glitch slices on canvas
+        const slices = Math.floor(Math.random() * 5) + 2;
+        for (let s = 0; s < slices; s++) {
+          const sy = Math.random() * effectiveH;
+          const sh = Math.random() * 30 + 4;
+          const dx = (Math.random() - 0.5) * 40;
+          ctx.fillStyle = `rgba(${Math.random()*255|0},${Math.random()*255|0},${Math.random()*255|0},0.08)`;
+          ctx.fillRect(0, sy, effectiveW, sh);
+          // horizontal shift overlay lines
+          ctx.fillStyle = `rgba(255,0,80,0.12)`;
+          ctx.fillRect(dx, sy, effectiveW, sh/3);
+          ctx.fillStyle = `rgba(0,255,200,0.12)`;
+          ctx.fillRect(-dx, sy + sh/3, effectiveW, sh/3);
+        }
+
+        // Shift the text element slightly
+        const jx = (Math.random() - 0.5) * 14;
+        const jy = (Math.random() - 0.5) * 8;
+        fsTrack.style.filter = `blur(${Math.random() > 0.6 ? '1px' : '0'})`;
+        // Apply extra offset on top of current transform
+        const curTransform = fsTrack.style.transform || '';
+        const base = curTransform.replace(/\s*translate\([^)]+\)/g,'');
+        // We keep position anim separate – just apply a temporary skew
+        fsTrack.style.textShadow = `${jx}px 0 2px rgba(255,0,80,0.9), ${-jx}px 0 2px rgba(0,255,200,0.9), 0 0 ${Math.round(baseSize*0.4)}px ${state.textColor}99`;
+      } else {
+        fsTrack.style.filter = '';
+        const gs = Math.round(baseSize * 0.4);
+        fsTrack.style.textShadow = `0 0 ${gs}px ${state.textColor}99, 0 0 ${gs*2}px ${state.textColor}44`;
+      }
+      fxAnim = requestAnimationFrame(draw);
+    }
+    draw();
+    return;
+  }
+
+  if (fx === 'matrix') {
+    // Green matrix rain in background
+    const CHAR_SIZE = 14;
+    const cols2 = Math.ceil(effectiveW / CHAR_SIZE);
+    const drops = Array.from({length: cols2}, () => Math.random() * effectiveH / CHAR_SIZE | 0);
+    const CHARS = 'アイウエオカキクケコ01アBCDEFGHIJKLMN'.split('');
+    function draw() {
+      ctx.fillStyle = 'rgba(0,0,0,0.15)';
+      ctx.fillRect(0,0,effectiveW,effectiveH);
+      ctx.fillStyle = '#00ff41';
+      ctx.font = `${CHAR_SIZE}px 'Share Tech Mono', monospace`;
+      drops.forEach((y, x) => {
+        const ch = CHARS[Math.random() * CHARS.length | 0];
+        ctx.fillText(ch, x * CHAR_SIZE, y * CHAR_SIZE);
+        if (y * CHAR_SIZE > effectiveH && Math.random() > 0.975) drops[x] = 0;
+        drops[x]++;
+      });
+      fxAnim = requestAnimationFrame(draw);
+    }
+    // Fill bg first
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0,0,effectiveW,effectiveH);
+    draw();
+    return;
+  }
+}
+
+// ── FULLSCREEN ─────────────────────────────────────────────────────────────────
+function launchFullscreen() {
+  try { document.documentElement.requestFullscreen?.(); } catch(e) {}
+
+  const doLaunch = (effectiveW, effectiveH, rotated) => {
+    cancelAnimationFrame(fsAnim);
+
+    const overlay = document.getElementById('fullscreen-overlay');
+    const fsTrack = document.getElementById('fs-track');
+
+    if (rotated) {
+      const vW = window.innerWidth, vH = window.innerHeight;
+      overlay.style.width  = vH + 'px';
+      overlay.style.height = vW + 'px';
+      overlay.style.position = 'fixed';
+      overlay.style.top  = '0px';
+      overlay.style.left = '0px';
+      overlay.style.transform = `rotate(90deg) translateY(-${vW}px)`;
+      overlay.style.transformOrigin = 'top left';
+    } else {
+      overlay.style.width = '';
+      overlay.style.height = '';
+      overlay.style.transform = '';
+      overlay.style.transformOrigin = '';
+      overlay.style.top = '';
+      overlay.style.left = '';
+    }
+
+    const fs = Math.min(state.fontSize * 2.2, effectiveH * 0.58);
+    fsTrack.textContent = state.text || ' ';
+    applyTextStyles(fsTrack, fs);
+    overlay.style.background = state.bgColor;
+    overlay.classList.add('active');
+
+    // Reset blink opacity
+    fsTrack.style.opacity = '1';
+
+    const hint = document.createElement('div');
+    hint.className = 'exit-hint';
+    hint.textContent = 'TAP · ESC para salir';
+    document.body.appendChild(hint);
+    setTimeout(() => hint.remove(), 5000);
+
+    // Start visual effect
+    startEffect(overlay, fsTrack, effectiveW, effectiveH);
+
+    // Scroll animation
+    if (state.direction === 'static') {
+      fsTrack.style.transform = 'translateX(0)';
+      return;
+    }
+
+    fsPos = state.direction === 1 ? -fsTrack.scrollWidth : effectiveW;
+    if (state.direction === 'bounce') { fsPos = 0; fsBounceDir = -1; }
+    const spd = state.speed * 2.2;
+
+    function fsStep() {
+      const tW = fsTrack.scrollWidth;
+      if (state.direction === -1) {
+        fsPos -= spd;
+        if (fsPos < -tW) fsPos = effectiveW;
+      } else if (state.direction === 1) {
+        fsPos += spd;
+        if (fsPos > effectiveW) fsPos = -tW;
+      } else {
+        fsPos += spd * fsBounceDir;
+        if (fsPos <= -(tW - effectiveW)) fsBounceDir = 1;
+        if (fsPos >= 0) fsBounceDir = -1;
+      }
+      fsTrack.style.transform = `translateX(${fsPos}px)`;
+      fsAnim = requestAnimationFrame(fsStep);
+    }
+    fsStep();
+  };
+
+  const isPortrait = window.innerHeight > window.innerWidth;
+  if (!isPortrait) {
+    doLaunch(window.innerWidth, window.innerHeight, false);
+  } else if (screen.orientation && typeof screen.orientation.lock === 'function') {
+    screen.orientation.lock('landscape').then(() => {
+      setTimeout(() => doLaunch(window.innerWidth, window.innerHeight, false), 300);
+    }).catch(() => doLaunch(window.innerHeight, window.innerWidth, true));
+  } else {
+    doLaunch(window.innerHeight, window.innerWidth, true);
+  }
+}
+
+function exitFullscreen() {
+  cancelAnimationFrame(fsAnim);
+  stopFxAnim();
+  const overlay = document.getElementById('fullscreen-overlay');
+  overlay.classList.remove('active');
+  overlay.style.cssText = '';
+  // Reset fx side-effects on track
+  const fsTrack = document.getElementById('fs-track');
+  fsTrack.style.opacity = '1';
+  fsTrack.style.filter = '';
+  try { document.exitFullscreen?.(); } catch(e) {}
+  try { screen.orientation.unlock?.(); } catch(e) {}
+}
+
+document.getElementById('fullscreen-overlay').addEventListener('click', exitFullscreen);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') exitFullscreen(); });
+document.getElementById('playBtn').addEventListener('click', launchFullscreen);
+
+// ── WIRING ─────────────────────────────────────────────────────────────────────
+document.getElementById('msgInput').addEventListener('input', e => { state.text = e.target.value; updatePreview(); });
+
+document.getElementById('fontSize').addEventListener('input', e => {
+  state.fontSize = +e.target.value;
+  document.getElementById('fontSizeVal').textContent = state.fontSize + 'px';
+  updatePreview();
+});
+
+document.getElementById('fontWeight').addEventListener('input', e => {
+  const weights = [400,700,900], labels = ['Normal','Bold','Black'];
+  const i = +e.target.value - 1;
+  state.fontWeight = weights[i];
+  document.getElementById('fontWeightVal').textContent = labels[i];
+  updatePreview();
+});
+
+document.getElementById('speed').addEventListener('input', e => {
+  state.speed = +e.target.value;
+  document.getElementById('speedVal').textContent = state.speed;
+});
+
+document.querySelectorAll('.dir-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.dir-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const d = btn.dataset.dir;
+    state.direction = d === 'bounce' ? 'bounce' : d === 'static' ? 'static' : +d;
+    runPreview();
+  });
+});
+
+function wireColor(inputId, presetId, stateKey) {
+  const inp = document.getElementById(inputId);
+  inp.addEventListener('input', e => {
+    state[stateKey] = e.target.value;
+    document.querySelectorAll(`#${presetId} .preset-dot`).forEach(d => d.classList.remove('active'));
+    updatePreview();
+  });
+  document.querySelectorAll(`#${presetId} .preset-dot`).forEach(dot => {
+    dot.addEventListener('click', () => {
+      state[stateKey] = dot.dataset.color;
+      inp.value = dot.dataset.color;
+      document.querySelectorAll(`#${presetId} .preset-dot`).forEach(d => d.classList.remove('active'));
+      dot.classList.add('active');
+      updatePreview();
+    });
+  });
+}
+wireColor('textColor', 'textPresets', 'textColor');
+wireColor('bgColor',   'bgPresets',   'bgColor');
+
+// ── INIT ───────────────────────────────────────────────────────────────────────
+updatePreview();
+runPreview();
+</script>
+</body>
+</html>
